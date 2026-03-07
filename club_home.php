@@ -76,12 +76,39 @@ if (isset($_POST['add_comment'])) {
 			$mod_id = $mod_res->fetch_assoc()['id'];
 			$conn->query("INSERT INTO notifications (user_id, message, type) VALUES ($mod_id, '$msg', 'flagged_comment')");
 		}
+
+		// return an error flag if it's an AJAX request
+		if(isset($_POST['ajax'])) { echo "profanity_error"; exit(); }
+
 		$_SESSION['comment_error'] = "⚠ Your comment violates our community guidelines and was not posted.";
 		header("Location: club_home.php?id=$club_id"); exit();
 	}
 
 	$safe_text = $conn->real_escape_string($raw_text);
 	$conn->query("INSERT INTO post_comments (post_id, user_id, comment_text) VALUES ($post_id, $user_id, '$safe_text')");
+
+	// if submitted via AJAX, echo the new DOM element and stop processing
+	if(isset($_POST['ajax'])) {
+		$u_info = $conn->query("SELECT fullname, profile_pic FROM users WHERE id = $user_id")->fetch_assoc();
+		$avatar = !empty($u_info['profile_pic']) ? $u_info['profile_pic'] : 'default-avatar.png';
+		$name = htmlspecialchars($u_info['fullname']);
+		$time = date('M d, g:i A');
+		$clean_comment = nl2br(htmlspecialchars($raw_text));
+
+		echo "<div class='comment-item'>
+                <img src='$avatar' class='comment-avatar'>
+                <div class='comment-content'>
+                    <div class='comment-header'>
+                        <span class='comment-name'>$name</span>
+                        <span class='comment-time'>$time</span>
+                    </div>
+                    <div>$clean_comment</div>
+                </div>
+              </div>";
+		exit();
+	}
+
+	// fallback for non-AJAX
 	header("Location: club_home.php?id=$club_id"); exit();
 }
 
@@ -349,7 +376,7 @@ $has_pending = $conn->query("SELECT id FROM membership_requests WHERE user_id = 
 					</div>
 				<?php endif; ?>
 
-				<form method="POST" class="comment-form" style="display: flex; gap: 8px; margin-top: 15px; align-items: center;">
+				<form method="POST" class="comment-form" onsubmit="submitComment(event, <?php echo $pid; ?>)" style="display: flex; gap: 8px; margin-top: 15px; align-items: center;">
 					<input type="hidden" name="post_id" value="<?php echo $pid; ?>">
 					<input type="text" name="comment_text" placeholder="Write a comment..." required style="flex: 1; margin: 0; background: #0f172a; border: 1px solid #334155; color: white; padding: 10px; border-radius: 8px;">
 					<button type="submit" name="add_comment" style="background: var(--accent); color: white; border: none; width: 42px; height: 42px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s;">
@@ -681,6 +708,39 @@ $has_pending = $conn->query("SELECT id FROM membership_requests WHERE user_id = 
 	<?php if($user_role === 'student'): ?>
     setInterval(checkStudentUnread, 4000);
 	<?php endif; ?>
+
+    // --- AJAX COMMENT SUBMISSION ---
+    function submitComment(e, postId) {
+        e.preventDefault(); // Stop the page from refreshing!
+
+        const form = e.target;
+        const input = form.querySelector('input[name="comment_text"]');
+        const text = input.value.trim();
+        if(!text) return;
+
+        // Build the data payload
+        const formData = new URLSearchParams();
+        formData.append('add_comment', '1');
+        formData.append('post_id', postId);
+        formData.append('comment_text', text);
+        formData.append('ajax', '1'); // Tell PHP to return HTML, not a redirect
+
+        fetch(window.location.href, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: formData.toString()
+        })
+            .then(res => res.text())
+            .then(html => {
+                if(html === "profanity_error") {
+                    alert("⚠ Your comment violates our community guidelines and was not posted.");
+                } else {
+                    // Instantly append the new comment HTML directly above the form
+                    form.insertAdjacentHTML('beforebegin', html);
+                    input.value = ''; // Clear the input field for the next comment
+                }
+            });
+    }
 </script>
 
 <?php if($is_assigned_moderator): ?>
