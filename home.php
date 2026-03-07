@@ -1,6 +1,12 @@
 <?php
 session_start();
 $conn = new mysqli("localhost", "root", "", "clubconnect");
+// Fetch the latest global announcement
+$ann_res = $conn->query("SELECT * FROM announcements 
+                         WHERE created_at >= NOW() - INTERVAL 1 DAY 
+                         ORDER BY created_at DESC LIMIT 1");
+
+$latest_announcement = ($ann_res && $ann_res->num_rows > 0) ? $ann_res->fetch_assoc() : null;
 
 if (!isset($_SESSION['user_id'])) {
     header("Location: login.php");
@@ -218,6 +224,37 @@ $messages = $conn->query("
             border-left: 4px solid var(--accent);
             background: rgba(179,18,23,0.08);
         }
+        .announcement-banner {
+    max-width: 1200px;
+    margin: -20px auto 30px auto; /* Pulls it up slightly toward the topbar */
+    background: linear-gradient(135deg, #b31217, #e52d27);
+    color: white;
+    padding: 20px 30px;
+    border-radius: 16px;
+    box-shadow: 0 10px 30px rgba(179, 18, 23, 0.4);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    animation: slideDown 0.5s ease-out;
+}
+
+@keyframes slideDown {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.announcement-content h4 {
+    font-size: 1.1rem;
+    margin-bottom: 5px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.announcement-content p {
+    font-size: 0.95rem;
+    opacity: 0.9;
+    line-height: 1.4;
+}
     </style>
 </head>
 <body id="body">
@@ -263,15 +300,37 @@ $messages = $conn->query("
                 <i data-lucide="settings" size="18"></i>
             </button>
             <div id="settingsDropdown" class="dropdown-content">
-                <a href="edit_profile.php"><i data-lucide="user-cog" size="16"></i> Account Settings</a>
-                <a href="calendar.php"><i data-lucide="calendar" size="16"></i> Event Calendar</a>
-                <div onclick="toggleDarkMode()"><i data-lucide="moon" size="16"></i> Toggle Theme</div>
-                <hr style="border: 0.5px solid rgba(128,128,128,0.2);">
-                <a href="logout.php" style="color: #ff4d4d;"><i data-lucide="log-out" size="16"></i> Logout</a>
+    <?php if ($user_role === 'admin'): ?>
+        <a href="admin_dashboard.php" style="background: rgba(179, 18, 23, 0.1); font-weight: bold; color: var(--accent);">
+            <i data-lucide="layout-dashboard" size="16"></i> Admin Dashboard
+        </a>
+        <hr style="border: 0.5px solid rgba(128,128,128,0.2);">
+    <?php endif; ?>
+
+    <a href="edit_profile.php"><i data-lucide="user-cog" size="16"></i> Account Settings</a>
+    <a href="calendar.php"><i data-lucide="calendar" size="16"></i> Event Calendar</a>
+    <div onclick="toggleDarkMode()"><i data-lucide="moon" size="16"></i> Toggle Theme</div>
+    <hr style="border: 0.5px solid rgba(128,128,128,0.2);">
+    <a href="logout.php" style="color: #ff4d4d;"><i data-lucide="log-out" size="16"></i> Logout</a>
+</div>
             </div>
         </div>
     </div>
 </div>
+<?php if ($latest_announcement): ?>
+    <div class="announcement-banner">
+        <div style="background: rgba(255,255,255,0.2); padding: 12px; border-radius: 12px;">
+            <i data-lucide="megaphone" size="28"></i>
+        </div>
+        <div class="announcement-content">
+            <h4>Admin Update: <?php echo htmlspecialchars($latest_announcement['title']); ?></h4>
+            <p><?php echo nl2br(htmlspecialchars($latest_announcement['message'])); ?></p>
+            <small style="font-size: 10px; opacity: 0.7; display: block; margin-top: 8px;">
+                Posted on <?php echo date('F j, Y - g:i A', strtotime($latest_announcement['created_at'])); ?>
+            </small>
+        </div>
+    </div>
+<?php endif; ?>
 
 <div class="hero">
     <h1 style="text-align:center; font-size: 2.8rem; margin-top: 20px; font-weight: 800;">Explore School Clubs</h1>
