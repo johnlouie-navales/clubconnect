@@ -434,6 +434,20 @@ $has_pending = $conn->query("SELECT id FROM membership_requests WHERE user_id = 
     70% { box-shadow: 0 0 0 15px rgba(239,68,68,0); }
     100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
 }
+.student-msg{
+background:#1e293b;
+padding:6px;
+margin:5px 0;
+border-radius:6px;
+}
+
+.mod-msg{
+background:#b31217;
+padding:6px;
+margin:5px 0;
+border-radius:6px;
+text-align:right;
+}
     </style>
 </head>
 <body>
@@ -770,12 +784,12 @@ function markMsg(id) {
     const item = event.target.closest('.mod-item');
     if(item) item.style.opacity = '0.5';
 
-    fetch("moderator_fetch.php?type=mark_msg&id=" + id)
-        .then(() => {
-            updateBadgeCount(); // Update the bubble number immediately
-            loadModeratorData(); // Reload the lists
-        });
-}
+    fetch("moderator_fetch.php?type=msg")
+    .then(res=>res.text())
+    .then(data=>{
+    document.getElementById("inboxList").innerHTML=data;
+    });
+            }
 
 // Helper function to specifically refresh the badge number
 function updateBadgeCount() {
@@ -801,6 +815,51 @@ function updateBadgeCount() {
                 bubble.classList.remove("pulse");
             }
         });
+}
+let currentStudent = 0;
+
+function openChat(studentId){
+
+currentStudent = studentId;
+
+document.getElementById("inboxList").style.display="none";
+document.getElementById("chatBox").style.display="block";
+
+loadChat();
+
+}
+
+function backToInbox(){
+
+document.getElementById("chatBox").style.display="none";
+document.getElementById("inboxList").style.display="block";
+
+}
+
+function loadChat(){
+
+fetch("fetch_chat.php?student_id="+currentStudent)
+.then(res=>res.text())
+.then(data=>{
+document.getElementById("chatMessages").innerHTML=data;
+});
+
+}
+
+function sendReply(){
+
+let msg = document.getElementById("replyText").value;
+
+fetch("send_reply.php",{
+method:"POST",
+headers:{"Content-Type":"application/x-www-form-urlencoded"},
+body:"student_id="+currentStudent+"&message="+encodeURIComponent(msg)
+})
+.then(()=>{
+document.getElementById("replyText").value="";
+loadChat();
+});
+
 }
 </script>
 <?php if($is_assigned_moderator): ?>
@@ -829,10 +888,22 @@ function updateBadgeCount() {
     <div class="mod-content" id="notifTab">
         Loading...
     </div>
-
     <div class="mod-content" id="msgTab" style="display:none;">
-        Loading...
+
+    <div id="inboxList">Loading...</div>
+
+    <div id="chatBox" style="display:none;">
+
+    <div style="margin-bottom:8px;">
+    <button onclick="backToInbox()">← Back</button>
     </div>
+
+    <div id="chatMessages" style="height:220px;overflow-y:auto;border:1px solid #333;padding:8px;border-radius:8px;"></div>
+
+<div style="display:flex;margin-top:6px;">
+<input id="replyText" placeholder="Type reply..." style="flex:1;padding:6px;">
+<button onclick="sendReply()">Send</button>
+</div>
 </div>
 <?php endif; ?>
 <audio id="notifSound" src="notification.mp3" preload="auto"></audio>
