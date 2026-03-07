@@ -21,7 +21,7 @@ if ($memberQuery) {
 }
 
 /* ==============================
-   GET EVENTS (Prev-Next Year)
+   GET POSTS AS EVENTS (Merged)
 ============================== */
 $currentYear = date("Y");
 $startDate = ($currentYear - 1) . "-01-01";
@@ -29,10 +29,16 @@ $endDate   = ($currentYear + 1) . "-12-31";
 
 $events = [];
 $eventQuery = $conn->query("
-    SELECT e.*, c.club_name
-    FROM events e
-    JOIN clubs c ON e.club_id = c.id
-    WHERE e.event_date BETWEEN '$startDate' AND '$endDate'
+    SELECT 
+        p.id, 
+        p.content as title, 
+        DATE(p.created_at) as event_date, 
+        p.club_id, 
+        c.club_name, 
+        c.hex_color
+    FROM club_posts p
+    JOIN clubs c ON p.club_id = c.id
+    WHERE p.created_at BETWEEN '$startDate' AND '$endDate'
 ");
 
 if ($eventQuery) {
@@ -46,155 +52,85 @@ if ($eventQuery) {
 <head>
 <meta charset="UTF-8">
 <title>ClubConnect - Event Calendar</title>
-
 <style>
-body {
-    margin: 0;
-    font-family: 'Segoe UI', sans-serif;
-    background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #b31217, #e52d27);
-    background-size: 400% 400%;
-    animation: gradientBG 12s ease infinite;
-    color: white;
-    padding: 120px 20px 40px;
-}
-
-@keyframes gradientBG {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-}
-
-.calendar-container {
-    max-width: 1000px;
-    margin: auto;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(20px);
-    padding: 30px;
-    border-radius: 25px;
-    box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-}
-
-.calendar-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-}
-
-.calendar-header button {
-    background: #e52d27;
-    border: none;
-    padding: 8px 15px;
-    border-radius: 10px;
-    color: white;
-    cursor: pointer;
-}
-
-.calendar-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 10px;
-}
-
-.day-name {
-    text-align: center;
-    font-weight: bold;
-    opacity: 0.8;
-}
-
-.day {
+    body {
+        margin: 0; font-family: 'Segoe UI', sans-serif;
+        background: linear-gradient(-45deg, #0f2027, #203a43, #2c5364, #b31217, #e52d27);
+        background-size: 400% 400%; animation: gradientBG 12s ease infinite;
+        color: white; padding: 120px 20px 40px;
+    }
+    @keyframes gradientBG { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
+    
+    .calendar-container {
+        max-width: 1000px; margin: auto; background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(20px); padding: 30px; border-radius: 25px;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    .calendar-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+    .calendar-header button { background: #e52d27; border: none; padding: 8px 15px; border-radius: 10px; color: white; cursor: pointer; }
+    
+    .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; }
+    .day-name { text-align: center; font-weight: bold; opacity: 0.8; }
+    .day {
     height: 100px;
     background: rgba(255,255,255,0.05);
     border-radius: 12px;
-    padding: 5px;
+    padding: 8px; /* Slightly more padding */
     position: relative;
     font-size: 14px;
+    overflow-y: auto; /* Still allow scrolling if too many dots */
+    
+    /* NEW: Use flexbox so multiple dots wrap correctly */
+    display: flex;
+    flex-wrap: wrap; 
+    align-content: flex-start; /* Align dots to the top-left */
+    gap: 5px; /* Spacing between dots */
 }
-
-.day-number {
+    .day-number {
+    position: absolute;
+    bottom: 8px;
+    right: 10px;
     font-size: 12px;
-    opacity: 0.7;
+    opacity: 0.6;
+    pointer-events: none; /* User can click through the number */
 }
-
-.dot {
-    width: 8px;
-    height: 8px;
+    
+    .dot {
+    width: 14px;  /* INCREASED FROM 10px */
+    height: 14px; /* INCREASED FROM 10px */
     border-radius: 50%;
     display: inline-block;
-    margin-right: 4px;
+    border: 1px solid rgba(255,255,255,0.3);
+    transition: 0.2s ease-in-out;
+    cursor: pointer;
+}
+    .dot:hover {
+    transform: scale(1.35); /* Pop out effect */
+    box-shadow: 0 0 10px white; /* Extra glow on hover */
+    z-index: 10; /* Ensure it floats above other dots */
 }
 
-.user-event {
-    background: #e52d27;
-}
+    .upcoming-item { padding: 15px; background: rgba(255,255,255,0.05); margin-bottom: 12px; border-radius: 12px; }
 
-.other-event {
-    background: grey;
-}
-
-.upcoming {
-    margin-top: 30px;
-}
-
-.upcoming-item {
-    padding: 10px;
-    border-left: 4px solid #e52d27;
-    background: rgba(255,255,255,0.05);
-    margin-bottom: 10px;
-    border-radius: 10px;
-}
-/* ================= TOPBAR ================= */
-.topbar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 70px;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(20px);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0 40px;
-    box-shadow: 0 5px 20px rgba(0,0,0,0.3);
-    z-index: 1000;
-}
-
-.topbar-left {
-    display: flex;
-    align-items: center;
-    gap: 20px;
-}
-
-.topbar-title {
-    font-size: 20px;
-    font-weight: bold;
-}
-
-.topbar a {
-    text-decoration: none;
-    color: white;
-    background: #e52d27;
-    padding: 8px 15px;
-    border-radius: 10px;
-    transition: 0.3s;
-}
-
-.topbar a:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
-}
+    .topbar {
+        position: fixed; top: 0; left: 0; width: 100%; height: 70px;
+        background: rgba(0,0,0,0.6); backdrop-filter: blur(20px);
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 0 40px; z-index: 1000;
+    }
+    .topbar a { text-decoration: none; color: white; background: #e52d27; padding: 8px 15px; border-radius: 10px; }
 </style>
 </head>
 <body>
+
 <div class="topbar">
-    <div class="topbar-left">
-        <div class="topbar-title">ClubConnect</div>
+    <div style="display:flex; align-items:center; gap:20px;">
+        <div style="font-size:20px; font-weight:bold;">ClubConnect</div>
         <a href="home.php">Home</a>
     </div>
 </div>
-<div class="calendar-container">
 
+<div class="calendar-container">
     <div class="calendar-header">
         <h2 id="monthTitle"></h2>
         <div>
@@ -202,7 +138,6 @@ body {
             <button onclick="changeMonth(1)">▶</button>
         </div>
     </div>
-
     <div class="calendar-grid" id="calendarGrid"></div>
 
     <div class="upcoming">
@@ -210,53 +145,52 @@ body {
         <?php
         $today = date("Y-m-d");
         $upcomingQuery = $conn->query("
-            SELECT e.*, c.club_name
-            FROM events e
-            JOIN clubs c ON e.club_id = c.id
-            WHERE e.event_date >= '$today'
-            ORDER BY e.event_date ASC
-            LIMIT 5
+            SELECT p.content as title, c.club_name, c.hex_color, DATE(p.created_at) as event_date
+            FROM club_posts p
+            JOIN clubs c ON p.club_id = c.id
+            WHERE p.created_at >= '$today'
+            ORDER BY p.created_at ASC LIMIT 5
         ");
-
-        if ($upcomingQuery) {
-            while ($u = $upcomingQuery->fetch_assoc()) {
-                echo "<div class='upcoming-item'>
-                        <strong>" . htmlspecialchars($u['title']) . "</strong><br>
-                        " . htmlspecialchars($u['club_name']) . " • " .
-                        date("M d, Y", strtotime($u['event_date'])) . "
-                      </div>";
-            }
+        while ($u = $upcomingQuery->fetch_assoc()) {
+            $color = $u['hex_color'] ?: '#e52d27';
+            echo "<div class='upcoming-item' style='border-left: 5px solid $color;'>
+                    <strong style='color: $color;'>" . htmlspecialchars(substr($u['title'], 0, 50)) . "...</strong><br>
+                    <small>{$u['club_name']} • " . date("M d, Y", strtotime($u['event_date'])) . "</small>
+                  </div>";
         }
         ?>
     </div>
+</div>
 
+<div id="postPreviewModal" style="display:none; position:fixed; z-index:2000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.7); backdrop-filter:blur(5px); justify-content:center; align-items:center;">
+    <div style="background:#1a1a1a; width:90%; max-width:400px; padding:25px; border-radius:20px; border-top: 8px solid #e52d27; position:relative; color:white;">
+        <span onclick="closePreview()" style="position:absolute; top:15px; right:20px; font-size:24px; cursor:pointer;">&times;</span>
+        <small id="previewClub" style="text-transform:uppercase; font-weight:bold;"></small>
+        <h3 style="margin:10px 0;">Club Update</h3>
+        <p id="previewContent" style="font-size:15px; line-height:1.6; max-height:200px; overflow-y:auto;"></p>
+        <button onclick="closePreview()" style="margin-top:20px; background:#e52d27; border:none; color:white; padding:10px; width:100%; border-radius:10px; cursor:pointer;">Close</button>
+    </div>
 </div>
 
 <script>
 const events = <?php echo json_encode($events); ?>;
 const userClubs = <?php echo json_encode($userClubs); ?>;
-
 let currentDate = new Date();
 
 function renderCalendar() {
     const grid = document.getElementById("calendarGrid");
     grid.innerHTML = "";
-
     const year = currentDate.getFullYear();
     const month = currentDate.getMonth();
 
-    document.getElementById("monthTitle").innerText =
-        currentDate.toLocaleString('default', { month: 'long' }) + " " + year;
+    document.getElementById("monthTitle").innerText = currentDate.toLocaleString('default', { month: 'long' }) + " " + year;
 
     const firstDay = new Date(year, month, 1);
     const lastDay = new Date(year, month + 1, 0);
 
-    const days = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-    days.forEach(d => {
+    ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].forEach(d => {
         const div = document.createElement("div");
-        div.className = "day-name";
-        div.innerText = d;
-        grid.appendChild(div);
+        div.className = "day-name"; div.innerText = d; grid.appendChild(div);
     });
 
     for (let i = 0; i < firstDay.getDay(); i++) {
@@ -264,38 +198,51 @@ function renderCalendar() {
     }
 
     for (let d = 1; d <= lastDay.getDate(); d++) {
-        const dateStr = year + "-" +
-            String(month + 1).padStart(2, '0') + "-" +
-            String(d).padStart(2, '0');
-
+        const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
         const dayDiv = document.createElement("div");
         dayDiv.className = "day";
 
         const num = document.createElement("div");
-        num.className = "day-number";
-        num.innerText = d;
+        num.className = "day-number"; num.innerText = d;
         dayDiv.appendChild(num);
 
         events.forEach(ev => {
             if (ev.event_date === dateStr) {
                 const dot = document.createElement("span");
-                dot.className = "dot " +
-                    (userClubs.includes(parseInt(ev.club_id)) ? "user-event" : "other-event");
+                dot.className = "dot";
+                dot.style.backgroundColor = ev.hex_color || '#e52d27';
+                dot.style.cursor = "pointer";
+                
+                if (userClubs.includes(parseInt(ev.club_id))) {
+                    dot.style.boxShadow = `0 0 8px ${ev.hex_color}`;
+                }
+
+                dot.onclick = (e) => {
+                    e.stopPropagation();
+                    showPostPreview(ev);
+                };
                 dayDiv.appendChild(dot);
             }
         });
-
         grid.appendChild(dayDiv);
     }
 }
 
-function changeMonth(step) {
-    currentDate.setMonth(currentDate.getMonth() + step);
-    renderCalendar();
+function showPostPreview(post) {
+    const modal = document.getElementById("postPreviewModal");
+    document.getElementById("previewClub").innerText = post.club_name;
+    document.getElementById("previewClub").style.color = post.hex_color;
+    document.getElementById("previewContent").innerText = post.title;
+    modal.querySelector('div').style.borderTopColor = post.hex_color;
+    modal.style.display = "flex";
 }
+
+function closePreview() { document.getElementById("postPreviewModal").style.display = "none"; }
+function changeMonth(step) { currentDate.setMonth(currentDate.getMonth() + step); renderCalendar(); }
+
+window.onclick = (e) => { if(e.target.id === "postPreviewModal") closePreview(); }
 
 renderCalendar();
 </script>
-
 </body>
 </html>
