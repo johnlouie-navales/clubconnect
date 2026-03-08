@@ -369,7 +369,7 @@ $has_pending = $conn->query("SELECT id FROM membership_requests WHERE user_id = 
 
 					<?php if(!empty($p['location_address'])): ?>
 						<a href="https://www.google.com/maps/search/?api=1&query=<?php echo urlencode($p['location_address']); ?>" target="_blank" class="btn-rsvp btn-map">
-							<i data-lucide="map" size="14"></i> Directions
+							<i data-lucide="map" size="14"></i> Map
 						</a>
 					<?php endif; ?>
 				</div>
